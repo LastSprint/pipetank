@@ -1,0 +1,45 @@
+package api;
+
+option go_package = "proto/";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+
+service API {
+  rpc SendEvent(stream RawEvents) returns (google.protobuf.Empty);
+}
+
+message RawEvents {
+  repeated RawEvent Events = 1;
+}
+
+enum EventKind {
+    EventKindStageStarted = 0;
+    EventKindStageFinished = 1;
+    EventKindGenericUpdate =2;
+}
+
+enum EventStatus {
+    EventStatusSuccess = 0;
+    EventStatusFailure = 1;
+}
+
+message RawEvent {
+  required string ExecID      = 1;
+  required bytes ProcessID =2;
+  required string ExecutorID = 3;
+  required RawStage Stage = 4;
+  required google.protobuf.Timestamp Ts =        5;
+  required EventKind Kind = 6;
+  required EventStatus Status = 7;
+  optional bytes Input = 8;
+  optional bytes Output = 9;
+  optional bytes Failure = 10;
+  optional bytes Metadata = 11;
+}
+
+message RawStage {
+    required string Name = 1;
+    required string Description = 2;
+}

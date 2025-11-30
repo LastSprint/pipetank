@@ -1,0 +1,89 @@
+networks:
+  mongo-rs:
+    driver: bridge
+
+services:
+  mongo1:
+    image: mongo:8
+    hostname: mongo1
+    container_name: mongo1
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [mongo-rs]
+    ports:
+      - "27017:27017"
+
+  mongo2:
+    image: mongo:8
+    hostname: mongo2
+    container_name: mongo2
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [mongo-rs]
+
+  mongo3:
+    image: mongo:8
+    hostname: mongo3
+    container_name: mongo3
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [mongo-rs]
+
+  rs-init:
+    image: mongo:8
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
+    networks: [mongo-rs]
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        mongosh --quiet --host mongo1:27017 <<'EOJS'
+        const config = {
+          _id: "rs0",
+          members: [
+            { _id: 0, host: "mongo1:27017" },
+            { _id: 1, host: "mongo2:27017" },
+            { _id: 2, host: "mongo3:27017" }
+          ]
+        };
+
+        try {
+          const status = rs.status();
+          if (status.ok === 1) {
+            print("Replica set already initialised");
+            quit(0);
+          }
+        } catch (err) {
+          if (err.codeName !== "NotYetInitialized") {
+            throw err;
+          }
+        }
+
+        rs.initiate(config);
+        rs.status();
+        EOJS
