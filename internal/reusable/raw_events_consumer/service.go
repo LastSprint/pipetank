@@ -11,7 +11,6 @@ import (
 	"slices"
 
 	"github.com/LastSprint/pipetank/internal/repo"
-	"github.com/google/uuid"
 )
 
 type store interface {
@@ -22,8 +21,7 @@ type store interface {
 
 	UpdateSingleStageExecution(
 		ctx context.Context,
-		id, executorID, stageName string,
-		processID uuid.UUID,
+		processID, executionID, stageExecutionID string,
 		events []repo.Event,
 	) error
 
@@ -42,6 +40,13 @@ func NewService(store store) *Service {
 	return &Service{store: store}
 }
 
+// HandleEvents does all the necessary processing.
+//
+// !!!IMPORTANT!!! DOES NOT VALIDATE EVENTS.
+// You have to use repo.Event.Validate() before calling this function.
+//
+// It is done this way to save some CPU cycles, improve cache and avoid unnecessary allocations
+// (because you have to map events from your source to repo.Event anyway).
 func (s *Service) HandleEvents(
 	ctx context.Context,
 	events []repo.Event,
@@ -54,11 +59,11 @@ func (s *Service) HandleEvents(
 
 	var errs error
 
-	for processID, executors := range ne {
-		for executorID, stages := range executors {
-			for stageName, executions := range stages {
-				for execID, events := range executions {
-					err := s.actOnEvents(ctx, events, execID, executorID, stageName, processID)
+	for processID, executions := range ne {
+		for executionID, stages := range executions {
+			for _, stageExecutions := range stages {
+				for stageExecutionID, events := range stageExecutions {
+					err := s.actOnEvents(ctx, events, processID, executionID, stageExecutionID)
 					if err != nil {
 						errs = errors.Join(errs, err)
 					}
@@ -73,10 +78,9 @@ func (s *Service) HandleEvents(
 func (s *Service) actOnEvents(
 	ctx context.Context,
 	events []repo.Event,
-	execID executionID,
-	executorID executorID,
-	stageName stageName,
 	processID processID,
+	executionID executionID,
+	stageExecutionID stageExecutionID,
 ) error {
 	updatesToSave := make([]repo.Event, 0)
 	needToEndEvent := false
@@ -90,11 +94,11 @@ func (s *Service) actOnEvents(
 			err := s.store.StartSingleStageExecution(
 				ctx,
 				repo.SingleStageExecutionEvent{
-					ID:         event.ExecID,
-					ProcessID:  event.ProcessID,
-					ExecutorID: event.ExecutorID,
-					RawStage:   event.Stage,
-					Start:      event,
+					ProcessID:        event.ProcessID,
+					ExecutionID:      event.ExecutionID,
+					StageExecutionID: event.StageExecutionID,
+					RawStage:         event.Stage,
+					Start:            event,
 				},
 			)
 			if err != nil {
@@ -112,7 +116,8 @@ func (s *Service) actOnEvents(
 	if len(updatesToSave) > 0 {
 		err := s.store.UpdateSingleStageExecution(
 			ctx,
-			execID, executorID, stageName, processID, updatesToSave,
+			processID, executionID, stageExecutionID,
+			updatesToSave,
 		)
 		if err != nil {
 			errs = errors.Join(errs, err)
@@ -134,12 +139,12 @@ func (s *Service) actOnEvents(
 }
 
 type (
-	processID   = uuid.UUID
-	executorID  = string
-	executionID = string
-	stageName   = string
+	processID        = string
+	executionID      = string
+	stageExecutionID = string
+	stageName        = string
 
-	normalizedEvents map[processID]map[executorID]map[stageName]map[executionID][]repo.Event
+	normalizedEvents map[processID]map[executionID]map[stageName]map[stageExecutionID][]repo.Event
 )
 
 func normalizeEvents(events []repo.Event) normalizedEvents {
@@ -149,22 +154,22 @@ func normalizeEvents(events []repo.Event) normalizedEvents {
 		process, ok := result[event.ProcessID]
 
 		if !ok {
-			process = map[executorID]map[stageName]map[executionID][]repo.Event{}
+			process = map[executionID]map[stageName]map[stageExecutionID][]repo.Event{}
 		}
 
-		executor, ok := process[event.ExecutorID]
+		execution, ok := process[event.ExecutionID]
 		if !ok {
-			executor = map[stageName]map[executionID][]repo.Event{}
+			execution = map[stageName]map[stageExecutionID][]repo.Event{}
 		}
 
-		stage, ok := executor[event.Stage.Name]
+		stage, ok := execution[event.Stage.Name]
 		if !ok {
-			stage = map[executionID][]repo.Event{}
+			stage = map[stageExecutionID][]repo.Event{}
 		}
 
-		stage[event.ExecID] = append(stage[event.ExecID], event)
-		executor[event.Stage.Name] = stage
-		process[event.ExecutorID] = executor
+		stage[event.StageExecutionID] = append(stage[event.StageExecutionID], event)
+		execution[event.Stage.Name] = stage
+		process[event.ExecutionID] = execution
 		result[event.ProcessID] = process
 	}
 

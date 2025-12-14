@@ -1,3 +1,5 @@
+syntax = "proto2";
+
 package api;
 
 option go_package = "proto/";
@@ -7,11 +9,19 @@ import "google/protobuf/empty.proto";
 
 
 service API {
-  rpc SendEvent(stream RawEvents) returns (google.protobuf.Empty);
+  rpc Stream(stream ClientCommand) returns (google.protobuf.Empty);
+  rpc HealthCheck(google.protobuf.Empty) returns (google.protobuf.Empty);
+}
+
+message ClientCommand {
+  oneof cmd {
+    RawEvents Events = 3;
+  }
 }
 
 message RawEvents {
-  repeated RawEvent Events = 1;
+  required string  WorkerID = 1;
+  repeated RawEvent Events = 2;
 }
 
 enum EventKind {
@@ -21,18 +31,21 @@ enum EventKind {
 }
 
 enum EventStatus {
-    EventStatusSuccess = 0;
-    EventStatusFailure = 1;
+    EventStatusUnknown = 0;
+    EventStatusSuccess = 1;
+    EventStatusFailure = 2;
 }
 
 message RawEvent {
-  required string ExecID      = 1;
-  required bytes ProcessID =2;
-  required string ExecutorID = 3;
+  required string ProcessID = 2;
+  required string ExecutionID = 3;
+  required string StageExecutionID = 1;
+
   required RawStage Stage = 4;
-  required google.protobuf.Timestamp Ts =        5;
+  required google.protobuf.Timestamp Ts = 5;
   required EventKind Kind = 6;
   required EventStatus Status = 7;
+
   optional bytes Input = 8;
   optional bytes Output = 9;
   optional bytes Failure = 10;

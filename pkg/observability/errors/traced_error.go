@@ -20,7 +20,7 @@ func SetTracedErrCapturedSizeDepth(val int) {
 }
 
 type TracedError struct {
-	error
+	nested error
 
 	traceID     string
 	stackFrames []frame
@@ -28,7 +28,7 @@ type TracedError struct {
 
 func NewTErr(ctx context.Context, err error, signals ...error) *TracedError {
 	return &TracedError{
-		error:       errors.Join(err, errors.Join(signals...)),
+		nested:      errors.Join(err, errors.Join(signals...)),
 		traceID:     octx.GetTraceID(ctx),
 		stackFrames: callers(),
 	}
@@ -37,7 +37,7 @@ func NewTErr(ctx context.Context, err error, signals ...error) *TracedError {
 func NewTErrf(ctx context.Context, format string, args ...any) *TracedError {
 	return &TracedError{
 		//nolint:err113
-		error:       fmt.Errorf(format, args...),
+		nested:      fmt.Errorf(format, args...),
 		traceID:     octx.GetTraceID(ctx),
 		stackFrames: callers(),
 	}
@@ -45,14 +45,22 @@ func NewTErrf(ctx context.Context, format string, args ...any) *TracedError {
 
 func (e *TracedError) WithSignal(err error) *TracedError {
 	return &TracedError{
-		error:       errors.Join(e.error, err),
+		nested:      errors.Join(e.nested, err),
 		traceID:     e.traceID,
 		stackFrames: e.stackFrames,
 	}
 }
 
+func (e *TracedError) Unwrap() error {
+	return e.nested
+}
+
 func (e *TracedError) String() string {
-	return e.error.Error() //nolint:staticcheck
+	return fmt.Sprintf("%s\n%s", e.nested.Error(), e.GetFStackTrace())
+}
+
+func (e *TracedError) Error() string {
+	return fmt.Sprintf("%s\n%s", e.nested.Error(), e.GetFStackTrace())
 }
 
 func (e *TracedError) GetTraceID() string {

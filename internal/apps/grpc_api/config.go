@@ -2,12 +2,12 @@ package grpc_api
 
 import "github.com/caarlos0/env/v11"
 
-type config struct {
+type Config struct {
 	Port int `env:"PORT" default:"50051"`
 }
 
-func parseConfig() (config, error) {
-	cfg, err := env.ParseAs[config]()
+func parseConfig() (Config, error) {
+	cfg, err := env.ParseAs[Config]()
 	if err != nil {
 		return cfg, err
 	}

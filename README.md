@@ -13,3 +13,9 @@
   - `repo` - contains repository layer for the project.
 - `pkg` - contains requsable components for the project.
   - `client` - contains client implementation for this service clients (`gRPC`) 
+## Description
+
+`ProcessID` - global unique identifier of the process. Create a surface for workers to execute processes.
+`WorkerID` - unique identifier of the worker that executes the process. Must be unique globally.
+`ExecutionID` - unique identifier of one execution of the process (can be considered as `BatchID`) must be unique within [`ProcessID`]
+`StageExecutionID` - unique identifier of the stage execution within one execution. Must be unique within [`ProcessID`, `ExecutionID`]

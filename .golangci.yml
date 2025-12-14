@@ -19,7 +19,7 @@ linters:
     - dupword
     - durationcheck
     - embeddedstructfieldcheck
-    - err113
+#    - err113
     - errcheck
     - errchkjson
     - errname
@@ -30,7 +30,7 @@ linters:
     - fatcontext
     - forbidigo
     - forcetypeassert
-    - funcorder
+#    - funcorder
     - funlen
     - ginkgolinter
     - gocheckcompilerdirectives

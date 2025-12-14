@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 
 	"github.com/LastSprint/pipetank/internal/repo"
 	"github.com/LastSprint/pipetank/pkg/client/proto"
 	"github.com/LastSprint/pipetank/pkg/mdb"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,8 +31,15 @@ func newHandlers(
 	return &handlers{eventHandler: eventHandler}
 }
 
-func (h *handlers) SendEvent(
-	stream grpc.ClientStreamingServer[proto.RawEvents, emptypb.Empty],
+func (h *handlers) HealthCheck(
+	ctx context.Context,
+	req *emptypb.Empty,
+) (*emptypb.Empty, error) {
+	return &emptypb.Empty{}, nil
+}
+
+func (h *handlers) Stream(
+	stream grpc.ClientStreamingServer[proto.ClientCommand, emptypb.Empty],
 ) error {
 	for {
 		batch, err := stream.Recv()
@@ -45,9 +52,18 @@ func (h *handlers) SendEvent(
 			return status.Errorf(codes.Internal, "recv error: %v", err)
 		}
 
-		converted := make([]repo.Event, 0, len(batch.Events))
+		events := batch.GetEvents()
+		if events == nil {
+			continue
+		}
 
-		err = convertEventsRaw(batch, converted)
+		if len(events.Events) == 0 {
+			continue
+		}
+
+		converted := make([]repo.Event, 0, len(events.Events))
+
+		err = convertEventsRaw(events, converted)
 		if err != nil {
 			return err
 		}
@@ -85,9 +101,10 @@ func convertEventsRaw(batch *proto.RawEvents, converted []repo.Event) error {
 		}
 
 		it := repo.Event{
-			ExecID:     ev.GetExecID(),
-			ProcessID:  uuid.UUID(ev.ProcessID),
-			ExecutorID: ev.GetExecutorID(),
+			ProcessID:        ev.GetProcessID(),
+			ExecutionID:      ev.GetExecutionID(),
+			StageExecutionID: ev.GetStageExecutionID(),
+			WorkerID:         batch.GetWorkerID(),
 			Stage: repo.RawStage{
 				Name:        ev.GetStage().GetName(),
 				Description: ev.GetStage().GetDescription(),
@@ -99,6 +116,16 @@ func convertEventsRaw(batch *proto.RawEvents, converted []repo.Event) error {
 			Output:   bsonOutput,
 			Failure:  bsonFailure,
 			Metadata: bsonMetadata,
+		}
+
+		err = it.Validate()
+		if err != nil {
+			slog.Info(
+				"invalid event",
+				slog.String("event", ev.String()),
+				slog.String("error", err.Error()),
+			)
+			continue
 		}
 
 		converted = append(converted, it)

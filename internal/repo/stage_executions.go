@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	oerrs "github.com/LastSprint/pipetank/pkg/observability/errors"
-	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -19,14 +18,12 @@ const (
 )
 
 func getSingleStageExecutionFilter(
-	id, executorID, stageName string,
-	processID uuid.UUID,
+	processID, executionID, stageExecutionID string,
 ) bson.M {
 	return bson.M{
-		SingleStageExecutionEventExecutorIDFieldName():   executorID,
-		SingleStageExecutionEventRawStageNameFieldName(): stageName,
-		SingleStageExecutionEventProcessIDFieldName():    processID,
-		"_id": id,
+		SingleStageExecutionEventProcessIDFieldName():        processID,
+		SingleStageExecutionEventExecutionIDFieldName():      executionID,
+		SingleStageExecutionEventStageExecutionIDFieldName(): stageExecutionID,
 	}
 }
 
@@ -86,8 +83,7 @@ func (r *Repo) StartSingleStageExecution(
 
 func (r *Repo) UpdateSingleStageExecution(
 	ctx context.Context,
-	id, executorID, stageName string,
-	processID uuid.UUID,
+	processID, executionID, stageExecutionID string,
 	events []Event,
 ) error {
 	updateOperation := bson.M{
@@ -98,7 +94,7 @@ func (r *Repo) UpdateSingleStageExecution(
 	v, err := r.client.
 		DB().
 		Collection(collectionNameSingleStageExec).
-		UpdateOne(ctx, getSingleStageExecutionFilter(id, executorID, stageName, processID), updateOperation)
+		UpdateOne(ctx, getSingleStageExecutionFilter(processID, executionID, stageExecutionID), updateOperation)
 
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return oerrs.NewTErrf(ctx, "no such execution: %w", oerrs.ErrNotFound)
@@ -134,10 +130,9 @@ func (r *Repo) FinishSingleStageExecution(
 	isSuccess bool,
 ) error {
 	filter := getSingleStageExecutionFilter(
-		event.ExecID,
-		event.ExecutorID,
-		event.Stage.Name,
 		event.ProcessID,
+		event.ExecutionID,
+		event.StageExecutionID,
 	)
 	update := bson.M{
 		"$set": bson.M{

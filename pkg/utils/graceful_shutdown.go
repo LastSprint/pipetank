@@ -18,7 +18,7 @@ func DieWithGrace(
 	activityDoneChan := make(chan error, 1)
 
 	go func() {
-		activityDoneChan <- activity(ctx)
+		activityDoneChan <- activity(newCtx)
 	}()
 
 	select {

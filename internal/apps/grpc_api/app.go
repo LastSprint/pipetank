@@ -16,9 +16,13 @@ import (
 func Run(ctx context.Context) error {
 	cfg, err := parseConfig()
 	if err != nil {
-		return fmt.Errorf("failed to parse config: %w", err)
+		return fmt.Errorf("failed to parse Config: %w", err)
 	}
 
+	return RunWithConfig(ctx, cfg)
+}
+
+func RunWithConfig(ctx context.Context, cfg Config) error {
 	mdbClinet, err := mdb.NewClient()
 	if err != nil {
 		return fmt.Errorf("failed to create mongodb client: %w", err)
@@ -49,7 +53,7 @@ func Run(ctx context.Context) error {
 		},
 		func(ctx context.Context) error {
 			grpcServer.GracefulStop()
-			return listener.Close()
+			return nil
 		},
 	)
 }

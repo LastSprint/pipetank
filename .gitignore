@@ -60,3 +60,4 @@ log/
 # --- Local configs ---
 .env
 .env.local
+/.local/
